@@ -2,6 +2,7 @@
 
 namespace Webkul\RestApi\Http\Controllers\V1\Admin\Catalog;
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Http\Request;
 use Webkul\Category\Http\Requests\CategoryRequest;
 use Webkul\Category\Repositories\CategoryRepository;
@@ -34,19 +35,16 @@ class CategoryController extends CatalogController
     /**
      * Store a newly created resource in storage.
      *
-     * @param  \Webkul\Category\Http\Requests\CategoryRequest  $request
+     * @param  \Webkul\Category\Http\Requests\CategoryRequest  $categoryRequest
      * @return \Illuminate\Http\Response
      */
-    public function store(CategoryRequest $request)
+    public function store(CategoryRequest $categoryRequest)
     {
-        $request->validate([
-            'slug'        => ['required', 'unique:category_translations,slug'],
-            'name'        => 'required',
-            'image.*'     => 'mimes:bmp,jpeg,jpg,png,webp',
-            'description' => 'required_if:display_mode,==,description_only,products_and_description',
-        ]);
+        Event::dispatch('catalog.category.create.before');
 
-        $category = $this->getRepositoryInstance()->create($request->all());
+        $category = $this->getRepositoryInstance()->create($categoryRequest->all());
+
+        Event::dispatch('catalog.category.create.after', $category);
 
         return response([
             'data'    => new CategoryResource($category),
@@ -57,15 +55,19 @@ class CategoryController extends CatalogController
     /**
      * Update the specified resource in storage.
      *
-     * @param  \Webkul\Category\Http\Requests\CategoryRequest  $request
+     * @param  \Webkul\Category\Http\Requests\CategoryRequest  $categoryRequest
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function update(CategoryRequest $request, $id)
+    public function update(CategoryRequest $categoryRequest, $id)
     {
         $this->getRepositoryInstance()->findOrFail($id);
+        
+        Event::dispatch('catalog.category.update.before', $id);
 
-        $category = $this->getRepositoryInstance()->update($request->all(), $id);
+        $category = $this->getRepositoryInstance()->update($categoryRequest->all(), $id);
+
+        Event::dispatch('catalog.category.update.after', $category);
 
         return response([
             'data'    => new CategoryResource($category),
@@ -90,7 +92,11 @@ class CategoryController extends CatalogController
             ], 400);
         }
 
+        Event::dispatch('catalog.category.delete.before', $id);
+
         $this->getRepositoryInstance()->delete($id);
+
+        Event::dispatch('catalog.category.delete.after', $id);
 
         return response([
             'message' => __('rest-api::app.common-response.success.delete', ['name' => 'Category']),
@@ -114,7 +120,13 @@ class CategoryController extends CatalogController
         }
 
         $categories->each(function ($category) {
+
+            Event::dispatch('catalog.category.delete.before', $category->id);
+
             $this->getRepositoryInstance()->delete($category->id);
+
+            Event::dispatch('catalog.category.delete.after', $category->id);
+            
         });
 
         return response([
